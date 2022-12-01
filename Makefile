@@ -20,7 +20,7 @@ SOURCES = main.c
 OBJECTS = $(patsubst %.c,$(BUILD_DIR)/%.rel,$(SOURCES))
 
 # http://sdcc.sourceforge.net/doc/sdccman.pdf
-COMPILE = sdcc -m$(ARCH) -c --std-sdcc11 --opt-code-size -D$(DEVICE) -DF_CPU=$(F_CPU) -DTARGET_VDD_MV=$(TARGET_VDD_MV) -I. -I$(ROOT_DIR)/include
+COMPILE = sdcc -m$(ARCH) -c --std-sdcc11 --opt-code-speed -D$(DEVICE) -DF_CPU=$(F_CPU) -DTARGET_VDD_MV=$(TARGET_VDD_MV) -I. -I$(ROOT_DIR)/include
 LINK = sdcc -m$(ARCH)
 EASYPDKPROG = easypdkprog
 
