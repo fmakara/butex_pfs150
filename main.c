@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stdbool.h>
 #ifndef PFS154
 #define PFS154
 #endif
@@ -17,15 +18,15 @@
 #define PIN_OUT    (4)
 
 // -------------------------- Timing definitions -----------------------------
-#define TIMING_SHORT     (5)
-#define TIMING_SHORT_TH  (10)
-#define TIMING_LONG      (20)
+#define TIMING_SHORT     (10)
+#define TIMING_SHORT_TH  (20)
+#define TIMING_LONG      (30)
 #define TIMING_MAX       (220)
 
 // -------------------------- General operations -----------------------------
-#define READ_KEY    ((PA&(1<<PIN_KEY))?1:0)
-#define READ_IN     ((PA&(1<<PIN_IN))?1:0)
-#define READ_OUT    ((PA&(1<<PIN_OUT))?1:0)
+#define READ_KEY    (PA&(1<<PIN_KEY))
+#define READ_IN     (PA&(1<<PIN_IN))
+#define READ_OUT    (PA&(1<<PIN_OUT))
 
 #define PULLUP_IN   PAPH|=(1<<PIN_IN)
 #define PULLUP_OUT  PAPH|=(1<<PIN_OUT)
@@ -44,29 +45,35 @@
 
 #define TIMER        TM2CT
 #define CLEAR_TIMER  TM2CT=0
-#define SLEEP(us)    CLEAR_TIMER; while(TIMER<us)
+#define SLEEP(us)    CLEAR_TIMER;while(TIMER<us)
 
 // ------------------------------ Main program -------------------------------
+    bool avoidBtnEvt = false;
+    bool lastKey = false;
+    bool data = false;
 void main() {
-    uint8_t avoidBtnEvt = 0;
-    uint8_t lastKey = 0;
-    uint8_t data = 0;
-    PDK_DISABLE_ILRC();
+    // PDK_DISABLE_ILRC();
     PAC = (uint8_t)~((1<<PIN_KEY)|(1<<PIN_IN)|(1<<PIN_OUT)); // all start as input
     PAPH = (1<<PIN_KEY)|(1<<PIN_IN)|(1<<PIN_OUT); // all start as pullup
     PADIER = (1<<PIN_KEY)|(1<<PIN_IN)|(1<<PIN_OUT); // any can wakeup
     MISC = (1<<MISC_FAST_WAKEUP_ENABLE_BIT);
-    TM2C = TM2C_CLK_ILRC;
-    TM2S = 8; // 1 count = 1us (for 8mhz sysclk)
+    TM2C = TM2C_CLK_IHRC;
+    TM2B = 255;
+    TM2S = TM2S_PRESCALE_DIV16; // 1 count = 1us
     CLEAR_TIMER;
+    avoidBtnEvt = false;
+    lastKey = false;
+    data = false;
     //T16M = (uint8_t)T16M_CLK_IHRC;
     //T16C = 0; // is this the counter?
+    while(TIMER<TIMING_MAX);
     while (1) {
-        uint8_t key = READ_KEY; // always sampling once per loop
+        bool key = READ_KEY; // always sampling once per loop
         // default state: all pins are inputs with pullups
         if(avoidBtnEvt){
-            if(TIMER>TIMING_MAX){
-                avoidBtnEvt = 0;
+            uint16_t local = (uint16_t)TIMER;
+            if(local>TIMING_MAX){
+                avoidBtnEvt = false;
             }
         } else if(key != lastKey) {
             lastKey = key;
@@ -86,7 +93,7 @@ void main() {
             PULLUP_OUT;
             INPUT_IN;
             INPUT_OUT;
-            avoidBtnEvt = 1;
+            avoidBtnEvt = true;
             CLEAR_TIMER;
         }
         if(!READ_OUT) {
@@ -102,7 +109,7 @@ void main() {
             if(!avoidBtnEvt){
                 lastKey = key;
                 data = !key;
-                avoidBtnEvt = 1;
+                avoidBtnEvt = true;
             }
             CLEAR_TIMER;
         }
@@ -114,9 +121,8 @@ void main() {
             while(!READ_IN);
             // The biggest assumption: the microcontroller will always send a
             // pulse smaller than 255us
-            volatile uint8_t dt = TIMER<TIMING_SHORT_TH;
-            if(dt) {
-                uint8_t read = 0;
+            if(TIMER<TIMING_SHORT_TH) {
+                bool read = false;
                 // keep pulling line until minimum time
                 while(TIMER<TIMING_SHORT);
                 SET_OUT;
@@ -124,17 +130,17 @@ void main() {
                 INPUT_OUT;
 
                 OUTPUT_IN;
-                if(data) SET_IN; else UNSET_IN;
-                PULLNO_IN;
-                CLEAR_TIMER;
-                while(TIMER<TIMING_SHORT) read |= READ_OUT;
                 SET_IN;
-                while(TIMER<TIMING_SHORT_TH) read |= READ_OUT;
+                PULLNO_IN;
+                if(data) SET_IN; else UNSET_IN;
+                CLEAR_TIMER;
+                while(TIMER<TIMING_SHORT) read |= !READ_OUT;
+                SET_IN;
                 PULLUP_IN;
                 INPUT_IN;
 
-                data = read;
-                avoidBtnEvt = 1;
+                data = !read;
+                avoidBtnEvt = true;
                 CLEAR_TIMER;
 
             } else {
@@ -146,7 +152,7 @@ void main() {
                 // (re) capture key
                 lastKey = key;
                 data = !key;
-                avoidBtnEvt = 1;
+                avoidBtnEvt = true;
                 CLEAR_TIMER;
             }
         }

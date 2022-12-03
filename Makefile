@@ -6,7 +6,7 @@ TARGET_VDD = 3.3
 
 # ---------------------------------------------------------------------
 
-OUTPUT_NAME = BlinkLED_$(DEVICE)
+OUTPUT_NAME = ButEx_$(DEVICE)
 
 include include/arch-from-device.mk
 
